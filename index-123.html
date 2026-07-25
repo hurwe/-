@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>TERRA REALIS | تيرا رياليس</title>
+<style>
+  :root{
+    --wood:#c9a15f;
+    --stone:#8d94a0;
+    --fire:#ff8a3d;
+    --hud-bg: rgba(10,14,20,0.55);
+    --hud-border: rgba(255,255,255,0.12);
+    --accent:#7fd8ff;
+    --accent2:#ffcf6b;
+    --danger:#ff5f5f;
+    --green:#8bd17c;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; user-select:none; -webkit-user-select:none;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:#000; font-family: 'Segoe UI', Tahoma, Geneva, sans-serif; touch-action:none;
+  }
+  #gameCanvas{ position:fixed; inset:0; display:block; width:100%; height:100%; }
+
+  /* ---------- Orientation Lock ---------- */
+  #rotateWarning{
+    position:fixed; inset:0; z-index:9999; background:#05070b;
+    display:none; align-items:center; justify-content:center; flex-direction:column;
+    color:#dfe8f2; text-align:center; padding:20px;
+  }
+  body.portrait #rotateWarning{ display:flex; }
+  body.portrait #gameCanvas, body.portrait .hud-layer{ display:none !important; }
+  #rotateIcon{ font-size:64px; animation:spin 1.8s ease-in-out infinite; margin-bottom:18px; }
+  @keyframes spin{ 0%,100%{transform:rotate(0deg);} 50%{transform:rotate(-90deg);} }
+
+  /* ---------- Loading Screen ---------- */
+  #loadingScreen{
+    position:fixed; inset:0; z-index:9000;
+    background: radial-gradient(ellipse at 50% 30%, #1a2b3d 0%, #0a1017 60%, #05080c 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff;
+    transition: opacity .8s ease;
+  }
+  #loadingScreen h1{
+    font-size:clamp(28px,6vw,56px); letter-spacing:10px; margin:0;
+    background: linear-gradient(180deg,#fff,#9fd6ff 60%, #4d8fb5);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow: 0 0 40px rgba(127,216,255,0.25);
+    font-weight:800;
+  }
+  #loadingScreen .sub{ letter-spacing:4px; opacity:.6; margin-top:6px; font-size:12px;}
+  #loadBarWrap{ width:min(360px,60vw); height:6px; background:rgba(255,255,255,0.08); border-radius:4px; margin-top:34px; overflow:hidden; border:1px solid rgba(255,255,255,0.1);}
+  #loadBar{ height:100%; width:0%; background:linear-gradient(90deg,#4d8fb5,#7fd8ff); transition:width .25s ease; }
+  #loadTip{ margin-top:16px; font-size:12px; opacity:.5; letter-spacing:1px; }
+
+  /* ---------- Menu Overlay ---------- */
+  #menuOverlay{
+    position:fixed; inset:0; z-index:8000; display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(ellipse at 50% 20%, rgba(45,80,110,0.35), rgba(4,7,11,0.85) 65%), #05080c;
+  }
+  #menuOverlay.hidden{ display:none; }
+  .menuBox{ text-align:center; color:#eaf3fb; padding:20px; max-width:520px; }
+  .menuBox h1{ font-size:clamp(30px,5vw,50px); letter-spacing:8px; margin:0 0 4px;
+    background: linear-gradient(180deg,#fff,#8fd0ff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .menuBox .tagline{ opacity:.55; font-size:13px; letter-spacing:2px; margin-bottom:28px;}
+  .menuBtn{
+    display:block; width:min(320px,70vw); margin:10px auto; padding:14px 20px;
+    background:var(--hud-bg); border:1px solid var(--hud-border); color:#fff; border-radius:10px;
+    font-size:16px; letter-spacing:1px; cursor:pointer; backdrop-filter: blur(6px);
+    transition: all .15s ease;
+  }
+  .menuBtn:active{ transform:scale(0.96); background:rgba(127,216,255,0.18); }
+  .menuBtn.primary{ background:linear-gradient(180deg,#5aa9d6,#3d7ea3); border-color:rgba(255,255,255,0.25); font-weight:700; }
+
+  /* ---------- HUD ---------- */
+  .hud-layer{ position:fixed; inset:0; z-index:100; pointer-events:none; }
+  .hud-layer > *{ pointer-events:auto; }
+
+  /* Vitals top-left */
+  #vitals{ position:fixed; top:12px; left:12px; display:flex; flex-direction:column; gap:6px; z-index:120; width:170px;}
+  .vitalBar{ height:14px; border-radius:7px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.15); overflow:hidden; position:relative;}
+  .vitalBar .fill{ height:100%; width:100%; transition:width .3s ease; border-radius:7px 0 0 7px;}
+  .vitalBar .icon{ position:absolute; right:4px; top:-1px; font-size:10px; filter:drop-shadow(0 0 2px #000);}
+  #healthBar .fill{ background: linear-gradient(90deg,#ff5f5f,#ff8b8b);}
+  #staminaBar .fill{ background: linear-gradient(90deg,#8bd17c,#c2f2b0);}
+  #hungerBar .fill{ background: linear-gradient(90deg,#ffcf6b,#ffe29e);}
+  #thirstBar .fill{ background: linear-gradient(90deg,#7fd8ff,#c7f0ff);}
+
+  /* Clock top-right */
+  #clockWidget{ position:fixed; top:12px; right:12px; z-index:120; background:var(--hud-bg); border:1px solid var(--hud-border);
+    border-radius:10px; padding:8px 14px; color:#fff; text-align:center; backdrop-filter: blur(6px); min-width:90px;}
+  #clockTime{ font-size:18px; font-weight:700; letter-spacing:1px;}
+  #clockIcon{ font-size:14px; }
+  #dayCount{ font-size:10px; opacity:.6; }
+
+  /* Crosshair */
+  #crosshair{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:110;
+    width:22px; height:22px; pointer-events:none; }
+  #crosshair::before, #crosshair::after{ content:''; position:absolute; background:rgba(255,255,255,0.85); }
+  #crosshair::before{ width:100%; height:2px; top:50%; transform:translateY(-50%); }
+  #crosshair::after{ height:100%; width:2px; left:50%; transform:translateX(-50%); }
+  #crosshair.hit::before, #crosshair.hit::after{ background:var(--accent2); }
+
+  /* interaction prompt */
+  #interactPrompt{ position:fixed; top:58%; left:50%; transform:translate(-50%,0); z-index:110; color:#fff;
+    background:var(--hud-bg); border:1px solid var(--hud-border); padding:6px 14px; border-radius:20px; font-size:12px;
+    opacity:0; transition:opacity .2s ease; white-space:nowrap; backdrop-filter: blur(4px);}
+  #interactPrompt.show{ opacity:1; }
+
+  /* Toast */
+  #toastWrap{ position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:130; display:flex; flex-direction:column; gap:6px; align-items:center; }
+  .toast{ background:var(--hud-bg); border:1px solid var(--hud-border); color:#fff; padding:6px 16px; border-radius:20px;
+    font-size:12px; backdrop-filter: blur(6px); animation: toastIn .25s ease, toastOut .4s ease 2.2s forwards; }
+  @keyframes toastIn{ from{opacity:0; transform:translateY(-8px);} to{opacity:1; transform:translateY(0);} }
+  @keyframes toastOut{ to{opacity:0; transform:translateY(-8px);} }
+
+  /* ---------- Virtual Joystick (bottom-left) ---------- */
+  #joystickZone{ position:fixed; left:18px; bottom:18px; width:130px; height:130px; z-index:150; }
+  #joyBase{ position:absolute; inset:0; border-radius:50%; background:rgba(20,26,34,0.35); border:2px solid rgba(255,255,255,0.18); backdrop-filter: blur(2px);}
+  #joyStick{ position:absolute; width:56px; height:56px; border-radius:50%; left:50%; top:50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(160,200,220,0.6));
+    transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(0,0,0,0.4), inset 0 0 8px rgba(255,255,255,0.4); }
+
+  /* ---------- Look area (right half handled via JS, invisible) ---------- */
+  #lookZone{ position:fixed; right:0; top:0; width:60%; height:100%; z-index:60; }
+
+  /* ---------- Action buttons bottom-right ---------- */
+  #actionCluster{ position:fixed; right:16px; bottom:16px; z-index:150; display:flex; align-items:flex-end; gap:10px; }
+  .actBtn{
+    border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff;
+    background:var(--hud-bg); border:1.5px solid var(--hud-border); backdrop-filter: blur(6px);
+    font-size:22px; box-shadow:0 4px 14px rgba(0,0,0,0.35);
+  }
+  .actBtn:active{ transform:scale(0.9); }
+  #btnMain{ width:78px; height:78px; font-size:30px; background: radial-gradient(circle at 35% 30%, #ffb877, #d9722c);
+    border-color:rgba(255,255,255,0.35); }
+  #btnJump{ width:58px; height:58px; }
+  #btnSprint{ width:52px; height:52px; font-size:18px; }
+  #btnSprint.active{ background: radial-gradient(circle at 35% 30%, #a8f08c, #4c9a34); }
+  .miniCol{ display:flex; flex-direction:column; gap:10px; margin-bottom:6px;}
+
+  /* Build mode rotate button */
+  #btnRotateBuild{ width:52px; height:52px; font-size:18px; display:none; }
+  body.build-mode #btnRotateBuild{ display:flex; }
+
+  /* ---------- Hotbar ---------- */
+  #hotbarWrap{ position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:150;
+    display:flex; gap:6px; background:var(--hud-bg); border:1px solid var(--hud-border); padding:6px; border-radius:14px;
+    backdrop-filter: blur(6px); max-width:80vw; }
+  .hotSlot{ width:46px; height:46px; border-radius:9px; background:rgba(255,255,255,0.06); border:1.5px solid transparent;
+    display:flex; align-items:center; justify-content:center; font-size:20px; position:relative; color:#fff; flex-shrink:0;}
+  .hotSlot.active{ border-color:var(--accent2); background:rgba(255,207,107,0.16); box-shadow:0 0 10px rgba(255,207,107,0.25); }
+  .hotSlot .qty{ position:absolute; bottom:1px; right:3px; font-size:9px; opacity:.75; }
+  .hotSlot .key{ position:absolute; top:1px; left:3px; font-size:8px; opacity:.4; }
+
+  /* ---------- Inventory / Build panel toggle (top area small button) ---------- */
+  #panelToggles{ position:fixed; top:60px; left:12px; z-index:120; display:flex; flex-direction:column; gap:8px; }
+  .toggleBtn{ width:42px; height:42px; border-radius:10px; background:var(--hud-bg); border:1px solid var(--hud-border);
+    color:#fff; font-size:18px; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(6px); }
+  .toggleBtn.active{ border-color: var(--accent); background:rgba(127,216,255,0.18); }
+
+  /* ---------- Build Menu ---------- */
+  #buildMenu{ position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:145;
+    display:none; gap:8px; background:var(--hud-bg); border:1px solid var(--hud-border); padding:10px; border-radius:14px; backdrop-filter: blur(6px);}
+  #buildMenu.show{ display:flex; }
+  .buildOpt{ width:56px; height:56px; border-radius:10px; background:rgba(255,255,255,0.06); border:1.5px solid transparent;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; font-size:20px; gap:2px;}
+  .buildOpt span{ font-size:8px; opacity:.6; }
+  .buildOpt.active{ border-color:var(--accent2); background:rgba(255,207,107,0.16); }
+
+  /* ---------- Inventory panel ---------- */
+  #invPanel{ position:fixed; inset:0; z-index:400; display:none; align-items:center; justify-content:center;
+    background:rgba(4,7,11,0.75); backdrop-filter: blur(4px); }
+  #invPanel.show{ display:flex; }
+  #invBox{ background:#141b24; border:1px solid var(--hud-border); border-radius:16px; padding:20px; width:min(560px,88vw); max-height:80vh; overflow:auto; color:#fff; }
+  #invBox h2{ margin:0 0 14px; letter-spacing:2px; font-size:16px; text-align:center; color:var(--accent);}
+  #invGrid{ display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
+  .invSlot{ aspect-ratio:1; border-radius:9px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:20px; position:relative;}
+  .invSlot .qty{ position:absolute; bottom:2px; right:4px; font-size:10px; opacity:.7;}
+  .invClose{ display:block; margin:16px auto 0; padding:8px 26px; background:rgba(255,255,255,0.08); border:1px solid var(--hud-border); border-radius:20px; color:#fff;}
+
+  /* ---------- Pause menu ---------- */
+  #pauseMenu{ position:fixed; inset:0; z-index:500; display:none; align-items:center; justify-content:center;
+    background:rgba(4,7,11,0.82); backdrop-filter: blur(6px); }
+  #pauseMenu.show{ display:flex; }
+
+  /* ---------- Death screen ---------- */
+  #deathScreen{ position:fixed; inset:0; z-index:600; display:none; align-items:center; justify-content:center; flex-direction:column;
+    background:radial-gradient(ellipse at center, rgba(90,10,10,0.5), rgba(4,7,11,0.95)); color:#fff; text-align:center;}
+  #deathScreen.show{ display:flex; }
+  #deathScreen h1{ letter-spacing:6px; color:var(--danger); font-size:36px; }
+
+  /* PWA install button */
+  #installBtn{ position:fixed; top:60px; right:12px; z-index:130; display:none; padding:8px 12px; font-size:11px;
+    background:var(--hud-bg); border:1px solid var(--hud-border); color:#fff; border-radius:20px; backdrop-filter: blur(6px);}
+  #installBtn.show{ display:block; }
+
+  #fsBtn{ position:fixed; bottom:80px; right:16px; z-index:120; width:38px; height:38px; border-radius:10px;
+    background:var(--hud-bg); border:1px solid var(--hud-border); color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px;}
+
+  ::-webkit-scrollbar{ width:6px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,0.2); border-radius:4px;}
+</style>
+</head>
+<body>
+
+<!-- Orientation lock -->
+<div id="rotateWarning">
+  <div id="rotateIcon">📱</div>
+  <h2 style="letter-spacing:2px;">قم بتدوير جهازك</h2>
+  <p style="opacity:.6;">تعمل TERRA REALIS بوضع أفقي فقط للحصول على أفضل تجربة</p>
+</div>
+
+<!-- Loading -->
+<div id="loadingScreen">
+  <h1>TERRA REALIS</h1>
+  <div class="sub">تيرا رياليس</div>
+  <div id="loadBarWrap"><div id="loadBar"></div></div>
+  <div id="loadTip">جاري توليد التضاريس...</div>
+</div>
+
+<!-- Main Menu -->
+<div id="menuOverlay" class="hidden">
+  <div class="menuBox">
+    <h1>TERRA REALIS</h1>
+    <div class="tagline">عالم مفتوح · بقاء · بناء حر</div>
+    <button class="menuBtn primary" id="btnNewWorld">🌍 عالم جديد</button>
+    <button class="menuBtn" id="btnContinue">💾 متابعة</button>
+    <button class="menuBtn" id="btnHowTo">🎮 طريقة اللعب</button>
+  </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="hud-layer" id="hudLayer" style="display:none;">
+  <div id="vitals">
+    <div class="vitalBar" id="healthBar"><div class="fill" id="healthFill"></div><span class="icon">❤️</span></div>
+    <div class="vitalBar" id="staminaBar"><div class="fill" id="staminaFill"></div><span class="icon">⚡</span></div>
+    <div class="vitalBar" id="hungerBar"><div class="fill" id="hungerFill"></div><span class="icon">🍖</span></div>
+    <div class="vitalBar" id="thirstBar"><div class="fill" id="thirstFill"></div><span class="icon">💧</span></div>
+  </div>
+
+  <div id="clockWidget">
+    <div id="clockIcon">☀️</div>
+    <div id="clockTime">06:00</div>
+    <div id="dayCount">اليوم 1</div>
+  </div>
+
+  <div id="panelToggles">
+    <button class="toggleBtn" id="btnInv">🎒</button>
+    <button class="toggleBtn" id="btnBuildToggle">🔨</button>
+    <button class="toggleBtn" id="btnPause">⏸️</button>
+  </div>
+
+  <div id="crosshair"></div>
+  <div id="interactPrompt"></div>
+  <div id="toastWrap"></div>
+
+  <div id="buildMenu">
+    <div class="buildOpt active" data-build="floor">🟫<span>أرضية</span></div>
+    <div class="buildOpt" data-build="wall">🧱<span>جدار</span></div>
+    <div class="buildOpt" data-build="pillar">🪵<span>عمود</span></div>
+    <div class="buildOpt" data-build="campfire">🔥<span>موقد</span></div>
+  </div>
+
+  <div id="joystickZone">
+    <div id="joyBase"></div>
+    <div id="joyStick"></div>
+  </div>
+
+  <div id="lookZone"></div>
+
+  <div id="hotbarWrap"></div>
+
+  <div id="actionCluster">
+    <div class="miniCol">
+      <div class="actBtn" id="btnRotateBuild">↻</div>
+      <div class="actBtn" id="btnJump">⬆️</div>
+      <div class="actBtn" id="btnSprint">🏃</div>
+    </div>
+    <div class="actBtn" id="btnMain">⛏️</div>
+  </div>
+
+  <button id="fsBtn">⛶</button>
+  <button id="installBtn">📲 تثبيت اللعبة</button>
+</div>
+
+<!-- Inventory -->
+<div id="invPanel">
+  <div id="invBox">
+    <h2>🎒 الحقيبة</h2>
+    <div id="invGrid"></div>
+    <button class="invClose" id="btnInvClose">إغلاق</button>
+  </div>
+</div>
+
+<!-- Pause -->
+<div id="pauseMenu">
+  <div class="menuBox">
+    <h1 style="font-size:28px;">متوقفة مؤقتاً</h1>
+    <button class="menuBtn primary" id="btnResume">▶️ استئناف</button>
+    <button class="menuBtn" id="btnSaveNow">💾 حفظ الآن</button>
+    <button class="menuBtn" id="btnMainMenu">🏠 القائمة الرئيسية</button>
+  </div>
+</div>
+
+<!-- Death -->
+<div id="deathScreen">
+  <h1>لقد سقطت</h1>
+  <p style="opacity:.7; margin-bottom:24px;">استيقظ في مخيمك واستمر في البقاء</p>
+  <button class="menuBtn primary" id="btnRespawn">إعادة الإحياء</button>
+</div>
+
+<link rel="manifest" href="./manifest.json">
+<script>
+  // Catches errors that happen before main.js's own handlers attach
+  // (e.g. the module script itself fails to fetch/parse).
+  window.addEventListener('error', function(e){
+    var tip = document.getElementById('loadTip');
+    if (tip && !tip.dataset.errorShown) {
+      tip.dataset.errorShown = '1';
+      tip.style.color = '#ff8080';
+      tip.style.direction = 'ltr';
+      tip.style.fontSize = '11px';
+      tip.style.maxWidth = '80vw';
+      tip.style.wordBreak = 'break-word';
+      tip.textContent = '⚠️ ' + (e.message || 'فشل تحميل الملفات') + (e.filename ? ' — ' + e.filename : '');
+      var wrap = document.getElementById('loadBarWrap');
+      if (wrap) wrap.style.display = 'none';
+    }
+  }, true);
+  // If main.js hasn't started the loading sequence within 6s, something failed silently
+  setTimeout(function(){
+    var tip = document.getElementById('loadTip');
+    if (tip && tip.textContent.indexOf('توليد') !== -1) {
+      tip.style.color = '#ff8080';
+      tip.style.direction = 'ltr';
+      tip.style.fontSize = '11px';
+      tip.textContent = '⚠️ تعذر تحميل اللعبة — تحقق من أن جميع الملفات (game.js, world.js, sky.js, player.js, main.js) مرفوعة في نفس المجلد، وأن اسم الملف main.js مطابق تماماً لحالة الأحرف.';
+    }
+  }, 6000);
+</script>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
