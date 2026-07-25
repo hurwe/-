@@ -1,0 +1,11 @@
+{
+  "name": "TERRA REALIS",
+  "short_name": "Terra Realis",
+  "description": "لعبة بقاء وعوالم مفتوحة واقعية",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05080c",
+  "theme_color": "#05080c",
+  "icons": []
+}
